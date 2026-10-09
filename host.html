@@ -46,6 +46,66 @@
   @media (prefers-reduced-motion: reduce) { .bar > i { transition:none !important; } }
 </style>
 </head>
+  <!-- REMOVE ENTRIES: start -->
+<style>
+  .rm { font:inherit; font-size:13px; font-weight:600; padding:4px 10px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--err); cursor:pointer; }
+  .rm:hover { background:color-mix(in srgb, var(--err) 10%, transparent); }
+  .clearrow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; }
+</style>
+<script>
+  (function () {
+    // Adds a Remove button to every row, plus "Clear all" buttons with a confirm step.
+    function addClear(listName, tableBodyId, label) {
+      const table = document.getElementById(tableBodyId).closest(".card");
+      const row = document.createElement("div");
+      row.className = "clearrow";
+      const btn = document.createElement("button");
+      btn.className = "rm"; btn.textContent = label;
+      const yes = document.createElement("button");
+      yes.className = "rm"; yes.textContent = "Yes, clear"; yes.hidden = true;
+      const no = document.createElement("button");
+      no.textContent = "Cancel"; no.hidden = true;
+      btn.onclick = () => { btn.hidden = true; yes.hidden = false; no.hidden = false; };
+      no.onclick = () => { btn.hidden = false; yes.hidden = true; no.hidden = true; };
+      yes.onclick = () => {
+        if (listName === "present") present.length = 0; else rejected.length = 0;
+        no.onclick(); render(); broadcast();
+      };
+      row.append(btn, yes, no);
+      table.appendChild(row);
+    }
+
+    const baseRender = render;
+    render = function () {
+      baseRender();
+      const addButtons = (tbodyId, list) => {
+        const rows = document.getElementById(tbodyId).children;
+        if (tbodyId === "rows" && !document.getElementById("rmHead")) {
+          const th = document.createElement("th"); th.id = "rmHead";
+          document.querySelector("#rows").closest("table").querySelector("thead tr").appendChild(th);
+        }
+        if (tbodyId === "rejRows" && !document.getElementById("rmHead2")) {
+          const th = document.createElement("th"); th.id = "rmHead2";
+          document.querySelector("#rejRows").closest("table").querySelector("thead tr").appendChild(th);
+        }
+        Array.from(rows).forEach((tr, i) => {
+          const td = document.createElement("td");
+          const b = document.createElement("button");
+          b.className = "rm"; b.textContent = "Remove";
+          b.onclick = () => { list.splice(i, 1); render(); broadcast(); };
+          td.appendChild(b); tr.appendChild(td);
+        });
+      };
+      addButtons("rows", present);
+      addButtons("rejRows", rejected);
+    };
+
+    addClear("present", "rows", "Clear all check-ins");
+    addClear("rejected", "rejRows", "Clear rejected list");
+    render();
+  })();
+</script>
+<!-- REMOVE ENTRIES: end -->
 <body>
   <!-- PASSWORD LOCK: start -->
 <div id="lock" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:grid;place-items:center;padding:16px;">

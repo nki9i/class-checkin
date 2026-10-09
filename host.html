@@ -47,6 +47,33 @@
 </style>
 </head>
 <body>
+  <!-- PASSWORD LOCK: start -->
+<div id="lock" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:grid;place-items:center;padding:16px;">
+  <form id="lockForm" style="width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:12px;">
+    <h1 style="margin:0;font-size:20px;">Host check-in</h1>
+    <label for="lockPw" class="muted">Password</label>
+    <input id="lockPw" type="password" autocomplete="current-password" required autofocus>
+    <button class="primary" type="submit">Unlock</button>
+    <p id="lockErr" style="margin:0;color:var(--err,#b42318);min-height:1.2em;"></p>
+  </form>
+</div>
+<script>
+  (function () {
+    // SHA-256 of the host password. The password itself is not stored in this file.
+    const HASH = "af87b77c4dba2d8ae71e00ead1efbad7290bb2a19b2b3449e0fd48afc20f1ba6";
+    const lock = document.getElementById("lock");
+    try { if (sessionStorage.getItem("host-ok") === HASH) { lock.remove(); return; } } catch (e) {}
+    document.getElementById("lockForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const pw = document.getElementById("lockPw").value;
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pw));
+      const hex = Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+      if (hex === HASH) { try { sessionStorage.setItem("host-ok", HASH); } catch (e) {} lock.remove(); }
+      else { document.getElementById("lockErr").textContent = "Wrong password. Try again."; }
+    });
+  })();
+</script>
+<!-- PASSWORD LOCK: end -->
 <div class="wrap">
   <section class="card">
     <div class="row between">

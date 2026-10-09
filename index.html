@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Class Check-in</title>
+<style>
+  :root { --bg:#f3f5f8; --card:#ffffff; --ink:#18202e; --muted:#5f6b7d; --accent:#1d4f91; --ok:#18794e; --err:#b42318; --line:#dfe4ec; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12161d; --card:#1b2029; --ink:#edf1f6; --muted:#9aa5b5; --accent:#86aee8; --ok:#5fcf93; --err:#ff8a7a; --line:#2b323e; color-scheme:dark; } }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--ink);
+         font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding:16px; }
+  .card { width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:28px 24px; }
+  h1 { margin:0 0 4px; font-size:24px; letter-spacing:-0.01em; }
+  p.sub { margin:0 0 22px; color:var(--muted); }
+  label { display:block; font-weight:600; margin-bottom:6px; }
+  input { width:100%; font:inherit; padding:12px 14px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--ink); }
+  input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  button { margin-top:14px; width:100%; font:inherit; font-weight:600; padding:13px; border:0; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; }
+  @media (prefers-color-scheme: dark) { button { color:#0e1320; } }
+  button:disabled { opacity:.6; cursor:default; }
+  .msg { margin-top:16px; min-height:24px; }
+  .err { color:var(--err); }
+  .done { text-align:center; }
+  .done .big { font-size:44px; line-height:1; color:var(--ok); margin-bottom:8px; }
+</style>
+</head>
+<body>
+<main class="card" id="card">
+  <h1>Class check-in</h1>
+  <p class="sub">Type your full name and tap Check in. Your check-in time is recorded.</p>
+  <form id="f">
+    <label for="name">Full name</label>
+    <input id="name" name="name" autocomplete="name" required minlength="2" maxlength="80" placeholder="e.g. Jordan Lee">
+    <button id="btn" type="submit">Check in</button>
+  </form>
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+</main>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script>
+  // Opened by scanning the QR code on the TA's screen. The check-in goes straight to the
+  // TA's open host page; nothing is stored on any server.
+  const qs = new URLSearchParams(location.search);
+  const room = (qs.get("r") || "").replace(/[^a-z0-9]/g, "");
+  const token = (qs.get("t") || "").replace(/[^a-z0-9]/g, "");
+  const f = document.getElementById("f"), btn = document.getElementById("btn"), msg = document.getElementById("msg"), nameEl = document.getElementById("name");
+
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  let device = store.get("checkin-device");
+  if (!device) { device = Math.random().toString(36).slice(2, 10); store.set("checkin-device", device); }
+  nameEl.value = store.get("checkin-name") || "";
+
+  if (!room || !token) {
+    msg.className = "msg err";
+    msg.textContent = "Scan the QR code shown in class to check in.";
+    btn.disabled = true;
+  }
+
+  function sendToHost(payload) {
+    return new Promise((resolve, reject) => {
+      const peer = new Peer();
+      let done = false;
+      const finish = (ok, v) => { if (done) return; done = true; clearTimeout(t); setTimeout(() => peer.destroy(), 500); ok ? resolve(v) : reject(v); };
+      const t = setTimeout(() => finish(false, new Error("Couldn't reach the check-in screen. Check your internet connection and try again.")), 20000);
+      peer.on("error", (e) => finish(false, new Error(e && e.type === "peer-unavailable"
+        ? "Check-in has ended. Scan the current QR code if it's still on screen."
+        : "Connection problem. Please try again.")));
+      peer.on("open", () => {
+        const conn = peer.connect("cbs-qr-" + room, { reliable: true });
+        conn.on("open", () => conn.send(payload));
+        conn.on("data", (reply) => reply && reply.ok ? finish(true, reply) : finish(false, new Error((reply && reply.error) || "Check-in failed.")));
+        conn.on("error", () => finish(false, new Error("Connection problem. Please try again.")));
+      });
+    });
+  }
+
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = nameEl.value.trim().replace(/\s+/g, " ");
+    btn.disabled = true; msg.className = "msg"; msg.textContent = "Checking in…";
+    try {
+      const reply = await sendToHost({ type: "checkin", name, token, device });
+      store.set("checkin-name", name);
+      const card = document.getElementById("card");
+      card.innerHTML = '<div class="done"><div class="big">✓</div><h1></h1><p class="sub"></p></div>';
+      card.querySelector("h1").textContent = "You're checked in, " + reply.name.split(" ")[0];
+      card.querySelector("p").textContent = "Recorded at " + reply.time + ".";
+    } catch (err) {
+      msg.className = "msg err"; msg.textContent = err.message; btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
